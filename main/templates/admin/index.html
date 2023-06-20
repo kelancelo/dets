@@ -1,0 +1,152 @@
+{% extends "admin/index.html" %}
+
+{% block extrahead %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", async () => {
+        async function getLastEventInfo() {
+            let response = await fetch("/last_event")
+            return await response.json()
+        }
+
+        async function getStats() {
+            let response = await fetch("/stats")
+            return await response.json()
+        }
+
+        let lastEventInfo = await getLastEventInfo()
+        let stats = await getStats()
+
+        document.querySelector("#event-name").innerHTML = `<b>Name:</b> ${lastEventInfo["event"]}`
+        document.querySelector("#event-winner").innerHTML = `<b>Winner:</b> ${lastEventInfo["winner"]}`
+
+        // console.log(lastEventInfo)
+        // console.log(stats)
+
+        const usersChart = document.getElementById('usersChart')
+        const eventsChart = document.getElementById('eventsChart')
+        const participantsChart = document.getElementById('participantsChart')
+
+        new Chart(usersChart, {
+            type: "pie",
+            data: {
+                labels: stats["groups"].map((group) => group["name"]),
+                datasets: [{
+                    data: stats["groups"].map((group) => { 
+                        return stats["users"].filter((user) => user["groups__name"] == group["name"]).length
+                    }),
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    title: {
+                        display: true,
+                        text: `Users (total: ${stats["users"].length})`
+                    }
+                }
+            }
+        })
+
+        let eventStatuses = ["active", "scheduled", "ended"]
+        new Chart(eventsChart, {
+            type: "pie",
+            data: {
+                labels: eventStatuses,
+                datasets: [{
+                    data: eventStatuses.map((status) => { 
+                        return stats["events"].filter((event) => event["status"] == status).length
+                    }),
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    title: {
+                        display: true,
+                        text: `Events (total: ${stats["events"].length})`
+                    }
+                }
+            }
+        })
+
+        let genders = [["M", "male"], ["F", "female"]]
+        new Chart(participantsChart, {
+            type: "pie",
+            data: {
+                labels: genders.map((g) => g[1]),
+                datasets: [{
+                    data: genders.map((gender) => { 
+                        return stats["participants"].filter((participant) => participant["gender"] == gender[0]).length
+                    }),
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    title: {
+                        display: true,
+                        text: `Participants (total: ${stats["participants"].length})`
+                    }
+                }
+            }
+        })
+
+    })
+</script>
+{% endblock %}
+
+{% block content %}
+    <div style="margin-bottom: 2rem; width: 93vw;">
+        <div 
+            style="
+                padding: 8px; 
+                background-color: #264B5D; 
+                font-size: .75rem;"
+        >
+            LAST EVENT INFO
+        </div>
+        <div id="event-name" style="border-bottom: 1px solid gray; padding: 4px;"></div>
+        <div id="event-winner" style="border-bottom: 1px solid gray; padding: 4px;"></div>
+    </div>
+        
+    <div style="margin-bottom: 3rem; width: 93vw;">
+
+        <div 
+            style="
+                padding: 8px; 
+                background-color: #264B5D; 
+                font-size: .75rem;"
+        >
+            QUICK STATS
+        </div>
+        <div 
+            style="
+                display: flex; 
+                flex-wrap: wrap; 
+                justify-content: center; 
+                border-bottom: 1px solid gray; 
+                padding-bottom: 1rem;"
+        >
+            <div>
+                <canvas id="usersChart"></canvas>
+            </div>    
+            <div>
+                <canvas id="eventsChart"></canvas>
+            </div>
+            <div>
+                <canvas id="participantsChart"></canvas>
+            </div>
+        </div>
+    </div>        
+    {{ block.super }}
+{% endblock %}

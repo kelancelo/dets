@@ -1,0 +1,342 @@
+{% extends "main/base.html" %}
+
+{% load static %}
+
+{% block body %}
+
+    {% if event %}
+
+        {% if is_judge_of_event %}
+            <div class="text-center mb-4 mt-3">
+                <h2>{{event.name}}</h2>
+            </div>
+
+            <div 
+                style="display: flex;"
+                class="mb-3"
+            >
+                {% for round in rounds %}
+                    <div 
+                        style="flex-grow: 1; text-align: center; cursor: pointer; position: relative;" 
+                        class="round-tab fw-semibold p-1"
+                        data-status="{{ round.status }}"
+                        data-id="{{ round.id }}"
+                    >
+                        {{ round.name }}
+                    </div>
+                {% endfor %}
+                </div>
+            
+            <div 
+                style="display: flex; gap: 16px; height: 75vh;"
+            >
+                <div
+                    class="border border-3 text-bg-primary rounded p-2" 
+                    style="display: flex; flex-direction: column; gap: 16px; overflow-y: scroll; flex-shrink: 0;"
+                >
+                    <h5 class="text-center">Participants</h5>
+                    <div id="participants" class="list-group" style="display: flex; flex-direction: column;">
+                    </div>
+                </div>
+
+                <div
+                    id="participant-panel" 
+                    class="border border-3 text-bg-primary rounded" 
+                    style="flex-grow: 1;"
+                >
+                    <div
+                        id="participant-panel-contents" 
+                        class="p-3"
+                        style="display: flex; flex-direction: column; overflow-y: scroll; height: 100%; gap: 48px; align-items: center;"
+                    >
+                        <div style="display: flex; flex-direction: column; gap: 16px;">
+                            <img
+                                class="rounded border border-2 border-primary" 
+                                style="object-fit: cover; object-position: center top; height: 300px; width: 300px;"
+                            >
+                            <div style="display: flex; flex-direction: column;">
+                                <span id="participant-name"></span>
+                                <span id="candidate-number"></span>
+                                <span id="representing"></span>
+                            </div>
+                        </div>
+                        
+                        <form 
+                            id="scoring-form" 
+                            style="width: 500px;" 
+                            onreset="handleReset(event, this)" 
+                            method="post"
+                            action="{% url 'main:save_scores' %}"
+                        >
+                            {% csrf_token %}
+                            <div id="criteria-container" style="display: flex; flex-direction: column; gap: 8px;">
+                            </div>
+                            
+                            <input type="reset" class="btn btn-secondary">
+                            <div  
+                                class="btn btn-light"  
+                                data-bs-toggle="modal" 
+                                data-bs-target="#submitModal"
+                            >
+                                Submit
+                            </div>
+
+                            <!-- Modal -->
+                            <div class="modal fade text-dark" id="submitModal" tabindex="-1">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h1 class="modal-title fs-5">Confirm submission</h1>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            Are you sure you want to submit?
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No</button>
+                                            <input type="submit" class="btn btn-primary">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+
+                        <div id="participant-scores" style="width: 500px;">
+                            <h4>Scores given</h4>
+                            <div></div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>            
+
+        {% else %}
+            <div style="display: flex; justify-content: center; align-items: center; height: 80vh;">
+                <h2>You are not a judge of the event "{{event.name}}."</h2>
+            </div>
+        {% endif %}
+
+    {% else %}
+        <div style="display: flex; justify-content: center; align-items: center; height: 80vh;">
+            <h2>There's no active event.</h2>
+        </div>
+    {% endif %}
+
+{% endblock %}
+
+
+{% block script %}
+    <script>
+        let participantPanelContents = document.querySelector("#participant-panel-contents")
+        let scoringForm = document.querySelector("#scoring-form")
+        let participantScores = document.querySelector("#participant-scores")
+        
+
+        function initialize() {
+            participantPanelContents.style.display = "none"
+            scoringForm.style.display = "none"
+            participantScores.style.display = "none"
+        }
+        
+        async function getCriteria(roundId) {
+            let response = await fetch(`${roundId}/criteria`)
+            return await response.json()
+        }
+
+        async function showParticipantScores(scores, roundId) {
+            scoringForm.style.display = "none"
+            participantScores.style.display = "initial"
+            let scoresContainer = participantScores.querySelector("div")
+            scoresContainer.classList.add("rounded", "border", "text-bg-light")
+            scoresContainer.innerHTML = ""
+            let criteria = JSON.parse(await getCriteria(roundId))
+            for (let i = 0; i < criteria.length; i++) {
+                let div = document.createElement("div")
+                div.style = "display: flex; justify-content: space-between;"
+                div.classList.add("border", "p-2")
+                let nameSpan = document.createElement("span")
+                nameSpan.style = "font-weight: bold;"
+                nameSpan.textContent = criteria[i]["fields"]["name"]
+                let scoreSpan = document.createElement("span")
+                scoreSpan.textContent = `${scores[i]["fields"]["value"]}/${criteria[i]["fields"]["max_score"]}%`
+                div.append(nameSpan, scoreSpan)
+                scoresContainer.append(div)
+            }
+        }
+
+        async function showParticipantScoringForm(roundId, participantData) {
+            participantScores.style.display = "none"
+            let criteriaContainer = scoringForm.querySelector("#criteria-container")
+            criteriaContainer.innerHTML = ""
+            let criteria = JSON.parse(await getCriteria(roundId))
+            if (criteria.length) {
+                let participantIdHiddenInput = document.createElement("input")
+                participantIdHiddenInput.type = "hidden"
+                participantIdHiddenInput.name = "participant_id"
+                participantIdHiddenInput.value = participantData["pk"]
+                let roundIdHiddenInput = document.createElement("input")
+                roundIdHiddenInput.type = "hidden"
+                roundIdHiddenInput.name = "round_id"
+                roundIdHiddenInput.value = roundId
+                scoringForm.append(participantIdHiddenInput, roundIdHiddenInput)
+                scoringForm.style.display = "initial"
+            }
+            for (let criterion of criteria) {
+                let outerDiv = document.createElement("div")
+                let label = document.createElement("label")
+                label.classList.add("fw-bold")
+                label.setAttribute("for", criterion["pk"])
+                label.textContent = `${criterion["fields"]["name"]} - ${criterion["fields"]["max_score"]}`
+                let innerDiv = document.createElement("div")
+                innerDiv.style = "display: flex; gap: 16px; align-items: center;"
+                let rangeInput = document.createElement("input")
+                rangeInput.type = "range"
+                rangeInput.value = 0
+                rangeInput.max = criterion["fields"]["max_score"]
+                rangeInput.dataset.criterionId = criterion["pk"]
+                rangeInput.style = "flex-grow: 1;"
+                rangeInput.classList.add("form-range")
+                rangeInput.oninput = () => syncValues(rangeInput)
+                let numberInput = document.createElement("input")
+                numberInput.type = "number"
+                // numberInput.value = 0
+                numberInput.min = 0
+                numberInput.max = criterion["fields"]["max_score"]
+                numberInput.dataset.criterionId = criterion["pk"]
+                numberInput.required = "true"
+                numberInput.classList.add("rounded", "form-control", "border-dark-subtle")
+                numberInput.style = "width: 70px;"
+                numberInput.name = `criterion-${criterion["pk"]}`
+                numberInput.oninput = () => syncValues(numberInput)
+
+                innerDiv.append(rangeInput, numberInput)
+                outerDiv.append(label, innerDiv)
+                criteriaContainer.append(outerDiv)
+            }
+        }
+        
+        function addActiveClassToParticipant(element) {
+            let participants = document.querySelectorAll(".participant")
+            participants.forEach((p) => p.classList.remove("text-bg-secondary"))
+            element.classList.add("text-bg-secondary")
+        }
+
+        async function getExtraParticipantData(roundId, participantId) {
+            let response = await fetch(`${roundId}/${participantId}/extra`)
+            return await response.json()
+        }
+        
+        async function displayParticipantData(roundId, participantData) {
+            document.querySelector("#participant-panel img").src = `static/main/images/${participantData["fields"]["image_url"]}`
+            document.querySelector("#participant-name").innerHTML = `<span><b>Name:</b> ${participantData["fields"]["first_name"]} ${participantData["fields"]["last_name"]}</span>`
+            let extraData = await getExtraParticipantData(roundId, participantData["pk"])
+            document.querySelector("#candidate-number").innerHTML = `<span><b>Candidate number:</b> ${extraData["candidate_number"]}</span>`
+            document.querySelector("#representing").innerHTML = `<span><b>Representing:</b> ${extraData["represented_entity"]}</span>`
+            
+        }
+
+        function handleParticipantClick(el, roundId, participantData) {
+            participantPanelContents.style.display = "flex"
+            addActiveClassToParticipant(el)
+            displayParticipantData(roundId, participantData)
+            if (el.hasAttribute("data-scores")) {
+                showParticipantScores(JSON.parse(el.dataset.scores), roundId)
+            }
+            else showParticipantScoringForm(roundId, participantData)      
+        }
+
+        async function getParticipantsData(roundId) {
+            let response = await fetch(`/${roundId}/participants`)
+            let participantsData = await response.json()
+            return JSON.parse(participantsData)
+        }
+        
+        async function checkIfParticipantHasBeenScored(participantId, roundId) {
+            let response = await fetch(`/check/${participantId}/${roundId}`)
+            if (response.ok) return await response.json()
+            else return false
+        }
+
+        async function displayParticipants(roundId) {
+            let participantsData = await getParticipantsData(roundId)
+            // console.log(participantsData)
+            let participantsContainer = document.querySelector("#participants")
+            participantsContainer.innerHTML = ""
+            for (let participant of participantsData) {
+                let div = document.createElement("div")
+                div.classList.add("participant", "list-group-item", "list-group-item-action", "border-primary")
+                div.style = "display: flex; gap: 16px; cursor: pointer;"
+                div.onclick = () => handleParticipantClick(div, roundId, participant)
+                let img = document.createElement("img")
+                img.src = `static/main/images/${participant["fields"]["image_url"]}`
+                img.classList.add("rounded")
+                img.style= "object-fit: cover; object-position: center top; height: 50px; width: 50px;"
+                let span = document.createElement("span")
+                span.style = "align-self: center;"
+                span.textContent = `${participant["fields"]["first_name"]} ${participant["fields"]["last_name"]}`
+                div.append(img, span)
+                let scores = await checkIfParticipantHasBeenScored(participant["pk"], roundId)
+                if (scores !== false) {
+                    let badge = document.createElement("span")
+                    badge.classList.add("badge", "rounded-pill", "bg-success")
+                    badge.style = "position: absolute; right: 0; top: 0"
+                    badge.textContent = "scores submitted"
+                    div.dataset.scores = scores
+                    div.append(badge)
+                }
+                participantsContainer.append(div)
+            }
+        }
+
+        function changeRoundTabAppearance(el) {
+            document.querySelectorAll(".round-tab").forEach((rt) => rt.classList.remove("clicked-round"))
+            el.classList.add("clicked-round")
+        }
+
+        function handleRoundClick(el, roundId) {
+            initialize()
+            changeRoundTabAppearance(el)
+            displayParticipants(roundId)
+        }        
+
+        function syncValues(el) {
+            if (el.type === "range") {
+                el.nextElementSibling.value = el.value
+            }
+            else {
+                el.previousElementSibling.value = el.value
+            }
+        }
+
+        function handleReset(event, form) {
+            event.preventDefault()
+            let rangeInputs = form.querySelectorAll("input[type='range']")
+            let numberInputs = form.querySelectorAll("input[type='number']")
+            rangeInputs.forEach((el) => el.value = 0)
+            numberInputs.forEach((el) => el.value = "")
+        }
+    
+        initialize()
+
+        function addRoundTabBadge(el) {
+            let badge = document.createElement("span")
+            let status = el.dataset.status
+            if (status === "active") badge.classList.add("badge", "rounded-pill", "bg-success")
+            else if (status === "scheduled") badge.classList.add("badge", "rounded-pill", "bg-warning")
+            else badge.classList.add("badge", "rounded-pill", "bg-danger")
+            badge.style = "position: absolute; right: 0; top: 0"
+            badge.textContent = status
+            el.append(badge)
+        }
+
+        document.querySelectorAll(".round-tab").forEach((tab) => {
+            addRoundTabBadge(tab)
+            if (tab.dataset.status !== "scheduled") {
+                tab.onclick = () => handleRoundClick(tab, tab.dataset.id)
+            }
+            if (tab.dataset.status === "active") {
+                tab.click()
+            }
+        })
+    </script>
+{% endblock %}

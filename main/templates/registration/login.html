@@ -1,0 +1,28 @@
+{% extends "main/base.html" %}
+
+{% block title %}Login{% endblock %}
+
+{% block body %}
+<div class="container text-bg-primary rounded p-3 mt-5" style="max-width: 512px;">
+    <h3 class="mb-3">Login</h3>
+
+    {% if message %}
+    <div>{{ message }}</div>
+    {% endif %}
+
+    <form action="{% url 'main:login' %}" method="post" class="mb-3">
+        {% csrf_token %}
+        {{ form }}
+        <input type="hidden" name="next" value="{{ next }}">
+        <input class="btn btn-light" type="submit" value="Login">
+    </form>
+
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+    document.querySelector("#id_username").classList.add("form-control", "mb-2");
+    document.querySelector("#id_password").classList.add("form-control", "mb-3");
+</script>
+{% endblock %}
