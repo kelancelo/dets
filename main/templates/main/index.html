@@ -22,7 +22,11 @@
                         data-status="{{ round.status }}"
                         data-id="{{ round.id }}"
                     >
-                        {{ round.name }}
+                        {% if round.name %}
+                            {{ round.name }}
+                        {% else %}
+                            Round {{ round.number }}
+                        {% endif %}
                     </div>
                 {% endfor %}
                 </div>
@@ -130,13 +134,8 @@
         let participantPanelContents = document.querySelector("#participant-panel-contents")
         let scoringForm = document.querySelector("#scoring-form")
         let participantScores = document.querySelector("#participant-scores")
+        let participantList = document.querySelector("#participants")
         
-
-        function initialize() {
-            participantPanelContents.style.display = "none"
-            scoringForm.style.display = "none"
-            participantScores.style.display = "none"
-        }
         
         async function getCriteria(roundId) {
             let response = await fetch(`${roundId}/criteria`)
@@ -174,11 +173,7 @@
                 participantIdHiddenInput.type = "hidden"
                 participantIdHiddenInput.name = "participant_id"
                 participantIdHiddenInput.value = participantData["pk"]
-                let roundIdHiddenInput = document.createElement("input")
-                roundIdHiddenInput.type = "hidden"
-                roundIdHiddenInput.name = "round_id"
-                roundIdHiddenInput.value = roundId
-                scoringForm.append(participantIdHiddenInput, roundIdHiddenInput)
+                scoringForm.append(participantIdHiddenInput)
                 scoringForm.style.display = "initial"
             }
             for (let criterion of criteria) {
@@ -199,7 +194,6 @@
                 rangeInput.oninput = () => syncValues(rangeInput)
                 let numberInput = document.createElement("input")
                 numberInput.type = "number"
-                // numberInput.value = 0
                 numberInput.min = 0
                 numberInput.max = criterion["fields"]["max_score"]
                 numberInput.dataset.criterionId = criterion["pk"]
@@ -227,7 +221,7 @@
         }
         
         async function displayParticipantData(roundId, participantData) {
-            document.querySelector("#participant-panel img").src = `static/main/images/${participantData["fields"]["image_url"]}`
+            document.querySelector("#participant-panel img").src = `/media/${participantData["fields"]["image"]}`
             document.querySelector("#participant-name").innerHTML = `<span><b>Name:</b> ${participantData["fields"]["first_name"]} ${participantData["fields"]["last_name"]}</span>`
             let extraData = await getExtraParticipantData(roundId, participantData["pk"])
             document.querySelector("#candidate-number").innerHTML = `<span><b>Candidate number:</b> ${extraData["candidate_number"]}</span>`
@@ -258,17 +252,16 @@
         }
 
         async function displayParticipants(roundId) {
+            participantList.innerHTML = ""
             let participantsData = await getParticipantsData(roundId)
             // console.log(participantsData)
-            let participantsContainer = document.querySelector("#participants")
-            participantsContainer.innerHTML = ""
             for (let participant of participantsData) {
                 let div = document.createElement("div")
                 div.classList.add("participant", "list-group-item", "list-group-item-action", "border-primary")
                 div.style = "display: flex; gap: 16px; cursor: pointer;"
                 div.onclick = () => handleParticipantClick(div, roundId, participant)
                 let img = document.createElement("img")
-                img.src = `static/main/images/${participant["fields"]["image_url"]}`
+                img.src = `/media/${participant["fields"]["image"]}`
                 img.classList.add("rounded")
                 img.style= "object-fit: cover; object-position: center top; height: 50px; width: 50px;"
                 let span = document.createElement("span")
@@ -284,7 +277,7 @@
                     div.dataset.scores = scores
                     div.append(badge)
                 }
-                participantsContainer.append(div)
+                participantList.append(div)
             }
         }
 
@@ -292,13 +285,7 @@
             document.querySelectorAll(".round-tab").forEach((rt) => rt.classList.remove("clicked-round"))
             el.classList.add("clicked-round")
         }
-
-        function handleRoundClick(el, roundId) {
-            initialize()
-            changeRoundTabAppearance(el)
-            displayParticipants(roundId)
-        }        
-
+        
         function syncValues(el) {
             if (el.type === "range") {
                 el.nextElementSibling.value = el.value
@@ -315,8 +302,6 @@
             rangeInputs.forEach((el) => el.value = 0)
             numberInputs.forEach((el) => el.value = "")
         }
-    
-        initialize()
 
         function addRoundTabBadge(el) {
             let badge = document.createElement("span")
@@ -329,14 +314,31 @@
             el.append(badge)
         }
 
-        document.querySelectorAll(".round-tab").forEach((tab) => {
-            addRoundTabBadge(tab)
-            if (tab.dataset.status !== "scheduled") {
-                tab.onclick = () => handleRoundClick(tab, tab.dataset.id)
+        function clearDivs() {
+            participantPanelContents.style.display = "none"
+            scoringForm.style.display = "none"
+            participantScores.style.display = "none"
+        }
+
+        function handleRoundClick(el, roundId) {
+            clearDivs()
+            changeRoundTabAppearance(el)
+            displayParticipants(roundId)
+        }
+
+        function initialize() {
+            clearDivs()
+            document.querySelectorAll(".round-tab").forEach((tab) => {
+                addRoundTabBadge(tab)
+                if (tab.dataset.status !== "scheduled") {
+                    tab.onclick = () => handleRoundClick(tab, tab.dataset.id)
+                }
+                if (tab.dataset.status === "active") {
+                    tab.click()
             }
-            if (tab.dataset.status === "active") {
-                tab.click()
-            }
-        })
+            })
+        }
+    
+        initialize()
     </script>
 {% endblock %}

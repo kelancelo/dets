@@ -3,11 +3,12 @@ from django.contrib.auth.decorators import login_required
 from .models import *
 from django.core.exceptions import ObjectDoesNotExist
 from django.core import serializers
-from django.http import HttpResponse, HttpResponseNotFound, JsonResponse
-import json
+from django.http import HttpResponseNotFound, JsonResponse, HttpResponse
 from django.contrib.auth import logout
 from django.contrib.auth.models import Group
-from django.forms.models import model_to_dict
+from django.shortcuts import get_object_or_404
+from docx import Document
+import os
 
 
 @login_required
@@ -27,7 +28,6 @@ def index(request):
     # Get the rounds of the event
     rounds = event.round_set.all()
     context["rounds"] = rounds
-    # context["criteria"] = safe(serializers.serialize("json", criteria))
     
     return render(request, "main/index.html", context)
 
@@ -55,44 +55,15 @@ def check_if_participant_has_been_scored(request, participant_id, round_id):
 @login_required 
 def save_scores(request):
     participant_id = request.POST["participant_id"]
-    round = None
-    num_judges = 0
-    current_total_score = None
-    scores = 0
     for key, value in request.POST.items():
         if "criterion" in key:
             criterion_id = key.split("-")[1]
-            criterion = Criterion.objects.get(id=criterion_id)
             Score.objects.create(
-                criterion=criterion, 
+                criterion_id=criterion_id, 
                 judge=request.user, 
                 participant_id=participant_id,
                 value=value
             )
-            scores += int(value)
-            # If this is the first input
-            if not round:
-                round = Round.objects.get(id=criterion.round_id)
-                num_judges = Event.objects.get(id=round.event_id).judges.count()
-                try:
-                    current_total_score = Total_Score.objects.get(
-                        participant_id=participant_id,
-                        round=round
-                    )
-                except ObjectDoesNotExist:
-                    pass
-    if current_total_score:
-        new_total_score = current_total_score.value * num_judges
-        new_total_score += scores
-        new_total_score /= num_judges
-        current_total_score.value = new_total_score
-        current_total_score.save()
-    else:
-        Total_Score.objects.create(
-            participant_id=participant_id,
-            round=round,
-            value=scores/num_judges
-        )
     return redirect("main:index")
     
 
@@ -129,14 +100,59 @@ def custom_logout(request):
 
 def get_last_event_info(request):
     event = Event.objects.filter(status="ended").order_by("-end_date").first()
-    final_round = Round.objects.filter(event=event).order_by("-end_date").first()
-    highest_score = Total_Score.objects.filter(round=final_round).order_by("-value").first()
-    winner = Participant.objects.get(id=highest_score.participant_id)
-    print(winner)
+    final_round = get_object_or_404(Round, event=event, num_winners=1)
+    total_scores = Total_Score.objects.filter(round=final_round).order_by("-value")[:3]
+    winners = []
+    for ts in total_scores:
+        participant = ts.participant
+        winners.append({
+            "candidate_number": Event_Participant.objects.get(event=event, participant=participant).candidate_number, 
+            "name": f"{participant.first_name} {participant.middle_name if participant.middle_name else ''} {participant.last_name}", 
+            "total_score": ts.value
+        })
     return JsonResponse({
-        "event": event.name,
-        "winner": f"{winner.first_name} {winner.last_name}"
+        "event_name": event.name,
+        "winners": winners
     }, safe=False)
+
+
+def int_to_ordinal(num):
+    suffixes = {1: 'st', 2: 'nd', 3: 'rd'}
+    if 10 < num < 20:
+        suffix = 'th'
+    else:
+        suffix = suffixes.get(num % 10, 'th')
+    return str(num) + suffix
+
+
+def download_last_event_info(request):
+    event = Event.objects.filter(status="ended").order_by("-end_date").first()
+    final_round = get_object_or_404(Round, event=event, num_winners=1)
+    total_scores = Total_Score.objects.filter(round=final_round).order_by("-value")[:3]
+    filename = event.name + ".docx"
+    document = Document()
+    document.add_paragraph().add_run()
+    document.add_heading(event.name, level=1)
+    table = document.add_table(rows=1, cols=4)
+    hdr_cells = table.rows[0].cells
+    hdr_cells[1].text = "Candidate number"
+    hdr_cells[2].text = "Name"
+    hdr_cells[3].text = "Total score"
+    for i, ts in enumerate(total_scores):
+        participant = ts.participant
+        row_cells = table.add_row().cells
+        row_cells[0].text = "Winner" if i == 0 else int_to_ordinal(i) + " runner up"
+        row_cells[1].text = str(Event_Participant.objects.get(event=event, participant=participant).candidate_number)
+        row_cells[2].text = f"{participant.first_name} {participant.middle_name if participant.middle_name else ''} {participant.last_name}"
+        row_cells[3].text = str(ts.value) 
+    document.add_page_break()
+    document.save(filename)
+    file = open(filename, "rb")
+    response = HttpResponse(file.read(), content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    response["Content-Disposition"] = f'attachment; filename={filename}'
+    file.close()
+    os.remove(filename)
+    return response
 
 
 def get_stats(request):

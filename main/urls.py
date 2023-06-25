@@ -1,4 +1,6 @@
 from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
 
 from . import views
 
@@ -13,5 +15,6 @@ urlpatterns = [
     path("<int:round_id>/<int:participant_id>/extra", views.get_extra_participant_data),
     path("<int:round_id>/criteria", views.get_criteria),
     path("stats", views.get_stats, name="stats"),
-    path("last_event", views.get_last_event_info)
-]
+    path("last_event", views.get_last_event_info),
+    path("download", views.download_last_event_info)
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

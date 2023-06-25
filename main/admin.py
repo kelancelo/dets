@@ -2,7 +2,6 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from .models import *
 from .forms import EventForm, RoundForm
-from django.forms.models import BaseInlineFormSet
 from django.core.exceptions import ObjectDoesNotExist
 
 
@@ -12,13 +11,9 @@ admin.site.index_template = 'admin/index.html'
 
 admin.site.register(User, UserAdmin)
 
-class ParticipantInlineFormset(BaseInlineFormSet):
-    model = Event.participants.through
-    fields = '__all__'
-
 class ParticipantInline(admin.TabularInline):
     model = Event.participants.through
-    formset = ParticipantInlineFormset
+    extra = 0
 
 class EventAdmin(admin.ModelAdmin):
     list_display = [field.name for field in Event._meta.fields]
@@ -60,42 +55,42 @@ class ScoreAdmin(admin.ModelAdmin):
     list_filter = ["criterion__round__event", "criterion__round"]
     search_fields = ["participant__first_name", "participant__last_name"]
 
-    def update_total_score(self, form, current_total_score, num_judges, original_obj=None):
-        new_total_score = current_total_score.value * num_judges
-        if original_obj:
-            new_total_score -= original_obj.value
-        new_total_score += form.cleaned_data["value"]
-        new_total_score /= num_judges
-        current_total_score.value = new_total_score
-        current_total_score.save()
+    # def update_total_score(self, form, current_total_score, num_judges, original_obj=None):
+    #     new_total_score = current_total_score.value * num_judges
+    #     if original_obj:
+    #         new_total_score -= original_obj.value
+    #     new_total_score += form.cleaned_data["value"]
+    #     new_total_score /= num_judges
+    #     current_total_score.value = new_total_score
+    #     current_total_score.save()
 
-    def save_model(self, request, obj, form, change):
-        criterion = Criterion.objects.get(id=obj.criterion_id)
-        round = Round.objects.get(id=criterion.round_id)
-        num_judges = Event.objects.get(id=round.event_id).judges.count()
-        current_total_score = None
-        try:
-            current_total_score = Total_Score.objects.get(
-                participant_id=obj.participant_id,
-                round=round
-            )
-        except ObjectDoesNotExist:
-            pass
-        # If the score is being updated 
-        if change:
-            original_obj = Score.objects.get(id=obj.id)
-            self.update_total_score(form, current_total_score, num_judges, original_obj=original_obj)
-        # if the score is just being created and there's already a total score
-        elif not change and current_total_score:
-            self.update_total_score(form, current_total_score, num_judges)
-        # If the score is just being created and there's still no total score
-        else:
-            Total_Score.objects.create(
-                participant_id=obj.participant_id,
-                round=round,
-                value=form.cleaned_data["value"]/num_judges
-            )
-        super().save_model(request, obj, form, change)
+    # def save_model(self, request, obj, form, change):
+    #     criterion = Criterion.objects.get(id=obj.criterion_id)
+    #     round = Round.objects.get(id=criterion.round_id)
+    #     num_judges = Event.objects.get(id=round.event_id).judges.count()
+    #     current_total_score = None
+    #     try:
+    #         current_total_score = Total_Score.objects.get(
+    #             participant_id=obj.participant_id,
+    #             round=round
+    #         )
+    #     except ObjectDoesNotExist:
+    #         pass
+    #     # If the score is being updated 
+    #     if change:
+    #         original_obj = Score.objects.get(id=obj.id)
+    #         self.update_total_score(form, current_total_score, num_judges, original_obj=original_obj)
+    #     # if the score is just being created and there's already a total score
+    #     elif not change and current_total_score:
+    #         self.update_total_score(form, current_total_score, num_judges)
+    #     # If the score is just being created and there's still no total score
+    #     else:
+    #         Total_Score.objects.create(
+    #             participant_id=obj.participant_id,
+    #             round=round,
+    #             value=form.cleaned_data["value"]/num_judges
+    #         )
+    #     super().save_model(request, obj, form, change)
 admin.site.register(Score, ScoreAdmin)
 
 class TotalScoreAdmin(admin.ModelAdmin):

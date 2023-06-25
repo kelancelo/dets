@@ -31,22 +31,23 @@ class Round(models.Model):
     event = models.ForeignKey(Event, on_delete=models.CASCADE)
     name = models.CharField(max_length=200, null=True, blank=True)
     number = models.IntegerField()
-    start_date = models.DateField()
+    start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
-    start_time = models.TimeField()
+    start_time = models.TimeField(null=True, blank=True)
     end_time = models.TimeField(null=True, blank=True)
-    location = models.CharField(max_length=200)
+    location = models.CharField(max_length=200, null=True, blank=True)
     STATUS_CHOICES = [
         ("active", "active"),
         ("scheduled", "scheduled"),
         ("ended", "ended")
     ]
     status = models.CharField(max_length=200, choices=STATUS_CHOICES, default="scheduled")
+    num_winners = models.IntegerField(verbose_name="Number of winners", null=True, blank=True)
     # Field for accessing m2m relationship between Participant
     participants = models.ManyToManyField("Participant", blank=True)
 
     def __str__(self):
-        return f"{self.event.name}: {self.name}"
+        return f"{self.event.name}: {self.name if self.name else 'Round: ' + str(self.number)}"
 
 
 class Criterion(models.Model):
@@ -73,8 +74,8 @@ class Participant(models.Model):
         ("F", "Female")
     ]
     gender = models.CharField(max_length=200, choices=GENDER_CHOICES)
-    image_url = models.CharField(max_length=200, null=True, blank=True)
-
+    image = models.ImageField(upload_to='main/participant_images/', blank=True, null=True)
+    
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
 
