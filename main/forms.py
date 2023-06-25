@@ -29,7 +29,7 @@ class EventForm(forms.ModelForm):
 class RoundForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if self.instance.event:
+        if self.initial and self.initial != self.data:
             # Filter participants based on the related event
             self.fields['participants'].queryset = Participant.objects.filter(event=self.instance.event)
 
